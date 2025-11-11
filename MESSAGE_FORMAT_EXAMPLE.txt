@@ -1,0 +1,180 @@
+================================================================================
+                RS232 SEGMENT MESSAGE FORMAT - VISUAL GUIDE
+================================================================================
+
+SEGMENT STRUCTURE:
+┌──────┬──────────────────┬──────────────────────────────────────────┬──────┬────┬────────────────────┐
+│  mt  │       pi         │                   pn                     │  pl  │ si │        ci          │
+└──────┴──────────────────┴──────────────────────────────────────────┴──────┴────┴────────────────────┘
+  3chars    16 chars                   40 chars                      variable  0       20 chars
+
+EXAMPLE 1: Basic Message (no patient location)
+================================================================================
+Raw Segments:
+  mt = "mpr"
+  pi = "MRN1234567890   " (padded to 16)
+  pn = "Doe, John                               " (padded to 40)
+  pl = "" (empty)
+  si = "" (empty)
+  ci = "SAMPLE001           " (padded to 20)
+
+Pipe-Delimited Format:
+  mtmpr|piMRN1234567890   |pnDoe, John                               |pl|si|ciSAMPLE001           
+
+Complete RS232 Message:
+  <STX>mtmpr|piMRN1234567890   |pnDoe, John                               |pl|si|ciSAMPLE001           <ETX><CR><LF>
+
+Hex Representation:
+  02 6D 74 6D 70 72 7C ... 03 0D 0A
+  │   └───────┬───────┘         │  └─ LF
+  │          mt=mpr            ETX CR
+  STX
+
+
+EXAMPLE 2: With Patient Location
+================================================================================
+Raw Segments:
+  mt = "mpr"
+  pi = "MRN9876543210   " (padded to 16)
+  pn = "Smith, Jane                             " (padded to 40)
+  pl = "WARD-A" (no padding)
+  si = "" (empty)
+  ci = "SAMPLE002           " (padded to 20)
+
+Pipe-Delimited Format:
+  mtmpr|piMRN9876543210   |pnSmith, Jane                             |plWARD-A|si|ciSAMPLE002           
+
+Complete RS232 Message:
+  <STX>mtmpr|piMRN9876543210   |pnSmith, Jane                             |plWARD-A|si|ciSAMPLE002           <ETX><CR><LF>
+
+
+FIELD SPECIFICATIONS:
+================================================================================
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Segment: mt (Message Type)                                                  │
+│ ─────────────────────────────                                               │
+│ Size:        3 characters (fixed)                                           │
+│ Value:       Always "mpr"                                                   │
+│ Padding:     Right-padded with spaces (already 3 chars)                     │
+│ Example:     "mpr"                                                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Segment: pi (Patient Identifier - MRN)                                      │
+│ ──────────────────────────────────────                                      │
+│ Size:        16 characters (fixed)                                          │
+│ Source:      LabOrderData.getMrn()                                          │
+│ Padding:     Right-padded with spaces                                       │
+│ Truncation:  If > 16 chars, truncate to 16                                  │
+│ Example:     "MRN1234567890   " (13 chars + 3 spaces = 16)                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Segment: pn (Patient Name)                                                  │
+│ ──────────────────────────                                                  │
+│ Size:        40 characters (fixed)                                          │
+│ Source:      LabOrderData.getPatientName()                                  │
+│ Format:      "LastName, FirstName"                                          │
+│ Padding:     Right-padded with spaces                                       │
+│ Truncation:  If > 40 chars, truncate to 40                                  │
+│ Auto-format: "John Doe" → "Doe, John"                                       │
+│ Example:     "Doe, John                               " (40 chars)          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Segment: pl (Patient Location)                                              │
+│ ───────────────────────────────                                             │
+│ Size:        Variable length                                                │
+│ Source:      External configuration / BCI worklist                          │
+│ Padding:     No padding                                                     │
+│ Optional:    Can be empty                                                   │
+│ Example:     "WARD-A" or "" (empty)                                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Segment: si (Specimen Info)                                                 │
+│ ────────────────────────────                                                │
+│ Size:        0 characters (always empty)                                    │
+│ Source:      Reserved for future use                                        │
+│ Padding:     N/A                                                            │
+│ Example:     "" (empty)                                                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Segment: ci (Case/Sample ID)                                                │
+│ ─────────────────────────────                                               │
+│ Size:        20 characters (fixed)                                          │
+│ Source:      LabOrderData.getSampleId()                                     │
+│ Padding:     Right-padded with spaces                                       │
+│ Truncation:  If > 20 chars, truncate to 20                                  │
+│ Example:     "SAMPLE001           " (9 chars + 11 spaces = 20)              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+NAME FORMATTING EXAMPLES:
+================================================================================
+Input                    │ Output
+─────────────────────────┼─────────────────────────
+"John Doe"              │ "Doe, John"
+"Mary Jane Watson"      │ "Watson, Mary Jane"
+"Smith, Jane"           │ "Smith, Jane" (no change)
+"Madonna"               │ "Madonna" (no change)
+"Dr. John Smith"        │ "Smith, Dr. John"
+
+
+CONTROL CHARACTERS:
+================================================================================
+Symbol  │ Hex  │ Dec │ Description
+────────┼──────┼─────┼──────────────────────────────
+<STX>   │ 0x02 │  2  │ Start of Text
+<ETX>   │ 0x03 │  3  │ End of Text
+<CR>    │ 0x0D │ 13  │ Carriage Return
+<LF>    │ 0x0A │ 10  │ Line Feed
+|       │ 0x7C │ 124 │ Pipe (field separator)
+
+
+TRANSMISSION SEQUENCE:
+================================================================================
+1. Start transmission: Send STX (0x02)
+2. Send message content with pipe separators
+3. End content: Send ETX (0x03)
+4. Line termination: Send CR (0x0D) + LF (0x0A)
+
+Visual Flow:
+  [Device] ──┬─→ STX
+             ├─→ mt value
+             ├─→ | (separator)
+             ├─→ pi value
+             ├─→ | (separator)
+             ├─→ pn value
+             ├─→ | (separator)
+             ├─→ pl value (may be empty)
+             ├─→ | (separator)
+             ├─→ si value (always empty)
+             ├─→ | (separator)
+             ├─→ ci value
+             ├─→ ETX
+             ├─→ CR
+             └─→ LF ──→ [BCI Software]
+
+
+SAMPLE JAVA CODE:
+================================================================================
+// Create lab order data
+LabOrderData order = new LabOrderData();
+order.setMrn("MRN1234567890");
+order.setPatientName("John Doe");
+order.setSampleId("SAMPLE001");
+
+// Create and send RS232 message
+RS232DataWriter writer = new RS232DataWriter();
+List<LabOrderData> orders = Arrays.asList(order);
+writer.sendPipeDelimitedMessage(orders, serialPort);
+
+// Result transmitted:
+// <STX>mtmpr|piMRN1234567890   |pnDoe, John                               |pl|si|ciSAMPLE001           <ETX><CR><LF>
+
+
+================================================================================
+                            END OF VISUAL GUIDE
+================================================================================
